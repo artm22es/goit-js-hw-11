@@ -4,12 +4,13 @@ export class SearchImagesAPI {
   #BASE_URL = 'https://pixabay.com/api/';
   #API_KEY = '39083023-6bd2967288a0046d4cd8dec4e';
 
-  page = 1;
-  query = null;
-  per_page = 40;
-
+  constructor() {
+    this.page = 1;
+    this.per_page = 40;
+    this.totalHits = null;
+  }
   async searchImages() {
-    const data = await axios.get(`${this.#BASE_URL}`, {
+    const { data } = await axios.get(`${this.#BASE_URL}`, {
       params: {
         key: this.#API_KEY,
         q: this.query,

@@ -35,28 +35,28 @@ async function handleSearchBtnSubmit(evt) {
     elements: { searchQuery },
   } = evt.currentTarget;
 
+  searchImagesApi.query = searchQuery.value.trim();
+
   if (!searchQuery.value) {
     return Notify.warning('Please, enter your search request');
   }
-  searchImagesApi.query = searchQuery.value.trim();
+
   try {
-    const images = await searchImagesApi.searchImages().then(data => {
-      const items = data.data.hits;
-      const totalItems = data.data.totalHits;
-      if (!items.length) {
-        return Notify.failure(
-          'Sorry, there are no images matching your search query. Please try again.'
-        );
-      }
-      Notify.success(`Hooray! We found ${totalItems} images.`);
-      const markup = createMarkup(items);
-      if (markup) {
-        galleryContainer.innerHTML = markup;
-        gallery.on('show.simplelightbox');
-        gallery.refresh();
-        loadMoreBtn.classList.remove('is-hidden');
-      }
-    });
+    const { hits, totalHits } = await searchImagesApi.searchImages();
+
+    if (!hits.length) {
+      return Notify.failure(
+        'Sorry, there are no images matching your search query. Please try again.'
+      );
+    }
+    Notify.success(`Hooray! We found ${totalHits} images.`);
+    const markup = createMarkup(hits);
+    if (markup) {
+      galleryContainer.innerHTML = markup;
+      gallery.on('show.simplelightbox');
+      gallery.refresh();
+      loadMoreBtn.classList.remove('is-hidden');
+    }
   } catch {
     error => console.error(error);
   }
@@ -64,14 +64,12 @@ async function handleSearchBtnSubmit(evt) {
 
 function handleLoadMoreClick() {
   searchImagesApi.page += 1;
+
   searchImagesApi
     .searchImages()
-    .then(data => {
-      const items = data.data.hits;
-      if (
-        data.data.totalHits <=
-        searchImagesApi.page * searchImagesApi.per_page
-      ) {
+    .then(({ data }) => {
+      const items = data.hits;
+      if (data.totalHits <= searchImagesApi.page * searchImagesApi.per_page) {
         loadMoreBtn.classList.add('is-hidden');
         toTheTopBtn.classList.remove('is-hidden');
         searchQuery.reset();
@@ -91,6 +89,15 @@ function reset() {
   searchImagesApi.page = 1;
   galleryContainer.innerHTML = '';
 
+  loadMoreBtn.classList.add('is-hidden');
+  toTheTopBtn.classList.add('is-hidden');
+}
+
+function scrollToTop() {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
   loadMoreBtn.classList.add('is-hidden');
   toTheTopBtn.classList.add('is-hidden');
 }
