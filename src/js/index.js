@@ -1,103 +1,78 @@
-import axios from 'axios';
+import { helper } from './useful-tools';
 import { createMarkup } from './create-markup';
-import { SearchImagesAPI } from './api';
+import { GetPictures } from './api';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
 
-const searchImagesApi = new SearchImagesAPI();
+const getPictures = new GetPictures();
 
-const galleryContainer = document.querySelector('.gallery');
-const searchQuery = document.querySelector('.search-form');
-const loadMoreBtn = document.querySelector('.load-more');
-const toTheTopBtn = document.querySelector('.top-btn');
+const searchFormEl = document.querySelector('.search-form');
+const galleryEl = document.querySelector('.gallery');
+const loadMoreBtnEl = document.querySelector('.load-more');
 
-let gallery = new SimpleLightbox('.gallery a', {
-  captions: true,
-  captionSelector: 'img',
-  captionType: 'attr',
-  captionsData: 'alt',
-  captionPosition: 'bottom',
-  captionDelay: 250,
-  overlayOpacity: 0.9,
-  widthRatio: 0.9,
-});
-let isActive = false;
+let lightbox = null;
 
-searchQuery.addEventListener('submit', handleSearchBtnSubmit);
-loadMoreBtn.addEventListener('click', handleLoadMoreClick);
-toTheTopBtn.addEventListener('click', scrollToTop);
+searchFormEl.addEventListener('submit', onSearchFormSubmit);
+loadMoreBtnEl.addEventListener('click', onLoadMoreClick);
 
-async function handleSearchBtnSubmit(evt) {
-  evt.preventDefault();
-  reset();
-  const {
-    elements: { searchQuery },
-  } = evt.currentTarget;
+async function onSearchFormSubmit(event) {
+  event.preventDefault();
 
-  searchImagesApi.query = searchQuery.value.trim();
+  getPictures.query = event.target.elements.searchQuery.value.trim();
+  getPictures.resetPage();
 
-  if (!searchQuery.value) {
-    return Notify.warning('Please, enter your search request');
+  if (!getPictures.query) {
+    Notify.failure('Sorry, enter something in search line.');
+    helper.clearMarkup();
+    helper.hideLoadMoreBtn();
+    return;
   }
 
   try {
-    const { hits, totalHits } = await searchImagesApi.searchImages();
-
-    if (!hits.length) {
-      return Notify.failure(
+    const { data } = await getPictures.searchImg();
+    if (!data.hits.length) {
+      Notify.failure(
         'Sorry, there are no images matching your search query. Please try again.'
       );
+      helper.clearMarkup();
+      helper.hideLoadMoreBtn();
+      return;
     }
-    Notify.success(`Hooray! We found ${totalHits} images.`);
-    const markup = createMarkup(hits);
-    if (markup) {
-      galleryContainer.innerHTML = markup;
-      gallery.on('show.simplelightbox');
-      gallery.refresh();
-      loadMoreBtn.classList.remove('is-hidden');
+    Notify.success(`Hooray! We found ${data.totalHits} images.`);
+    galleryEl.innerHTML = createMarkup(data.hits);
+    helper.showLoadMoreBtn();
+
+    lightbox = new SimpleLightbox('.gallery  a', {
+      captionDelay: 250,
+      scrollZoom: false,
+      captionsData: 'alt',
+      captionPosition: 'bottom',
+    });
+
+    if (data.totalHits <= getPictures.perPage) {
+      helper.hideLoadMoreBtn();
     }
-  } catch {
-    error => console.error(error);
+  } catch (error) {
+    console.log(error);
   }
 }
 
-function handleLoadMoreClick() {
-  searchImagesApi.page += 1;
+async function onLoadMoreClick() {
+  getPictures.incrementPage();
 
-  searchImagesApi
-    .searchImages()
-    .then(({ data }) => {
-      const items = data.hits;
-      if (data.totalHits <= searchImagesApi.page * searchImagesApi.per_page) {
-        loadMoreBtn.classList.add('is-hidden');
-        toTheTopBtn.classList.remove('is-hidden');
-        searchQuery.reset();
-        Notify.failure(
-          "We're sorry, but you've reached the end of search results."
-        );
-        return;
-      }
-      const newMarkup = createMarkup(items);
-      galleryContainer.insertAdjacentHTML('beforeend', newMarkup);
-      gallery.refresh();
-    })
-    .catch(error => console.error(error));
-}
+  try {
+    const { data } = await getPictures.searchImg();
 
-function reset() {
-  searchImagesApi.page = 1;
-  galleryContainer.innerHTML = '';
+    if (Math.ceil(data.totalHits / getPictures.perPage) === getPictures.page) {
+      helper.hideLoadMoreBtn();
+      Notify.info("We're sorry, but you've reached the end of search results.");
+    }
 
-  loadMoreBtn.classList.add('is-hidden');
-  toTheTopBtn.classList.add('is-hidden');
-}
-
-function scrollToTop() {
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth',
-  });
-  loadMoreBtn.classList.add('is-hidden');
-  toTheTopBtn.classList.add('is-hidden');
+    galleryEl.insertAdjacentHTML('beforeend', createMarkup(data.hits));
+    lightbox.refresh();
+    helper.smoothScroll();
+  } catch (error) {
+    console.log(error);
+  }
 }
